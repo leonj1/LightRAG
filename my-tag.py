@@ -3,6 +3,10 @@ import argparse
 import os
 import sys
 
+import os
+from lightrag import LightRAG, QueryParam
+from lightrag.llm.openai import gpt_4o_mini_complete, gpt_4o_complete, openai_embed
+
 def list_makdown_files(folder_path):
     """
     List all Markdown files in the specified folder.
@@ -46,7 +50,32 @@ def main():
     
     args = parser.parse_args()
     markdown_files = list_makdown_files(args.folder_path)
-    
+
+    rag = LightRAG(
+        working_dir="your/path",
+        embedding_func=openai_embed,
+        llm_model_func=gpt_4o_mini_complete
+    )
+
+    # Insert text
+    rag.insert("Your text")
+
+    # Perform naive search
+    mode="naive"
+    # Perform local search
+    mode="local"
+    # Perform global search
+    mode="global"
+    # Perform hybrid search
+    mode="hybrid"
+    # Mix mode Integrates knowledge graph and vector retrieval.
+    mode="mix"
+
+    rag.query(
+        "What are the top themes in this story?",
+        param=QueryParam(mode=mode)
+    )    
+
     # The function now returns the list of files, which can be used for further processing
     # For example, you could count them:
     if markdown_files:
