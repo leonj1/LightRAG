@@ -57,8 +57,16 @@ def main():
         llm_model_func=gpt_4o_mini_complete
     )
 
-    # Insert text
-    rag.insert("Your text")
+    # Insert contents of each Markdown file
+    from tqdm import tqdm
+    for filename in tqdm(markdown_files, desc="Processing files"):
+        full_path = os.path.join(args.folder_path, filename)
+        try:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+                rag.insert(content)
+        except Exception as e:
+            print(f"\nError processing {filename}: {e}")
 
     # Perform naive search
     mode="naive"
