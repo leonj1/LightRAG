@@ -59,14 +59,29 @@ def main():
 
     # Insert contents of each Markdown file
     from tqdm import tqdm
-    for filename in tqdm(markdown_files, desc="Processing files"):
+    successful_inserts = 0
+    failed_inserts = 0
+    total_files = len(markdown_files)
+
+    print(f"\nStarting to process {total_files} files...")
+    
+    for filename in tqdm(markdown_files, desc="Processing files", unit="file", ncols=100):
         full_path = os.path.join(args.folder_path, filename)
         try:
             with open(full_path, 'r', encoding='utf-8') as f:
                 content = f.read()
+                tqdm.write(f"Processing: {filename}")
                 rag.insert(content)
+                successful_inserts += 1
         except Exception as e:
-            print(f"\nError processing {filename}: {e}")
+            tqdm.write(f"\nError processing {filename}: {e}")
+            failed_inserts += 1
+            continue
+
+    print(f"\nProcessing complete:")
+    print(f"✓ Successfully processed: {successful_inserts} files")
+    if failed_inserts > 0:
+        print(f"✗ Failed to process: {failed_inserts} files")
 
     # Perform naive search
     mode="naive"
