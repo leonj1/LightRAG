@@ -52,7 +52,7 @@ def main():
     markdown_files = list_makdown_files(args.folder_path)
 
     rag = LightRAG(
-        working_dir="your/path",
+        working_dir=os.getcwd(),  # Use current working directory
         embedding_func=openai_embed,
         llm_model_func=gpt_4o_mini_complete
     )
@@ -72,7 +72,7 @@ def main():
     mode="mix"
 
     rag.query(
-        "What are the top themes in this story?",
+        "What are the biggest tax benefits to businesses?",
         param=QueryParam(mode=mode)
     )    
 
