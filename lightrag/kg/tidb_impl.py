@@ -5,7 +5,7 @@ from typing import Any, Union, final
 
 import numpy as np
 
-from lightrag.types import KnowledgeGraph
+from lightrag.types import KnowledgeGraph, KnowledgeGraphNode, KnowledgeGraphEdge
 
 
 from ..base import BaseGraphStorage, BaseKVStorage, BaseVectorStorage
@@ -20,7 +20,7 @@ if not pm.is_installed("pymysql"):
 if not pm.is_installed("sqlalchemy"):
     pm.install("sqlalchemy")
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, text  # type: ignore
 
 
 class TiDB:
@@ -174,6 +174,14 @@ class TiDBKVStorage(BaseKVStorage):
             self.db = None
 
     ################ QUERY METHODS ################
+    async def get_all(self) -> dict[str, Any]:
+        """Get all data from storage
+
+        Returns:
+            Dictionary containing all stored data
+        """
+        async with self._storage_lock:
+            return dict(self._data)
 
     async def get_by_id(self, id: str) -> dict[str, Any] | None:
         """Fetch doc_full data by id."""
@@ -270,6 +278,86 @@ class TiDBKVStorage(BaseKVStorage):
         # Ti handles persistence automatically
         pass
 
+    async def delete(self, ids: list[str]) -> None:
+        """Delete records with specified IDs from the storage.
+
+        Args:
+            ids: List of record IDs to be deleted
+        """
+        if not ids:
+            return
+
+        try:
+            table_name = namespace_to_table_name(self.namespace)
+            id_field = namespace_to_id(self.namespace)
+
+            if not table_name or not id_field:
+                logger.error(f"Unknown namespace for deletion: {self.namespace}")
+                return
+
+            ids_list = ",".join([f"'{id}'" for id in ids])
+            delete_sql = f"DELETE FROM {table_name} WHERE workspace = :workspace AND {id_field} IN ({ids_list})"
+
+            await self.db.execute(delete_sql, {"workspace": self.db.workspace})
+            logger.info(
+                f"Successfully deleted {len(ids)} records from {self.namespace}"
+            )
+        except Exception as e:
+            logger.error(f"Error deleting records from {self.namespace}: {e}")
+
+    async def drop_cache_by_modes(self, modes: list[str] | None = None) -> bool:
+        """Delete specific records from storage by cache mode
+
+        Args:
+            modes (list[str]): List of cache modes to be dropped from storage
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        if not modes:
+            return False
+
+        try:
+            table_name = namespace_to_table_name(self.namespace)
+            if not table_name:
+                return False
+
+            if table_name != "LIGHTRAG_LLM_CACHE":
+                return False
+
+            # 构建MySQL风格的IN查询
+            modes_list = ", ".join([f"'{mode}'" for mode in modes])
+            sql = f"""
+            DELETE FROM {table_name}
+            WHERE workspace = :workspace
+            AND mode IN ({modes_list})
+            """
+
+            logger.info(f"Deleting cache by modes: {modes}")
+            await self.db.execute(sql, {"workspace": self.db.workspace})
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting cache by modes {modes}: {e}")
+            return False
+
+    async def drop(self) -> dict[str, str]:
+        """Drop the storage"""
+        try:
+            table_name = namespace_to_table_name(self.namespace)
+            if not table_name:
+                return {
+                    "status": "error",
+                    "message": f"Unknown namespace: {self.namespace}",
+                }
+
+            drop_sql = SQL_TEMPLATES["drop_specifiy_table_workspace"].format(
+                table_name=table_name
+            )
+            await self.db.execute(drop_sql, {"workspace": self.db.workspace})
+            return {"status": "success", "message": "data dropped"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
 
 @final
 @dataclass
@@ -298,9 +386,13 @@ class TiDBVectorDBStorage(BaseVectorStorage):
             await ClientManager.release_client(self.db)
             self.db = None
 
-    async def query(self, query: str, top_k: int) -> list[dict[str, Any]]:
+    async def query(
+        self, query: str, top_k: int, ids: list[str] | None = None
+    ) -> list[dict[str, Any]]:
         """Search from tidb vector"""
-        embeddings = await self.embedding_func([query])
+        embeddings = await self.embedding_func(
+            [query], _priority=5
+        )  # higher priority for query
         embedding = embeddings[0]
 
         embedding_string = "[" + ", ".join(map(str, embedding.tolist())) + "]"
@@ -396,15 +488,233 @@ class TiDBVectorDBStorage(BaseVectorStorage):
         params = {"workspace": self.db.workspace, "status": status}
         return await self.db.query(SQL, params, multirows=True)
 
+    async def delete(self, ids: list[str]) -> None:
+        """Delete vectors with specified IDs from the storage.
+
+        Args:
+            ids: List of vector IDs to be deleted
+        """
+        if not ids:
+            return
+
+        table_name = namespace_to_table_name(self.namespace)
+        id_field = namespace_to_id(self.namespace)
+
+        if not table_name or not id_field:
+            logger.error(f"Unknown namespace for vector deletion: {self.namespace}")
+            return
+
+        ids_list = ",".join([f"'{id}'" for id in ids])
+        delete_sql = f"DELETE FROM {table_name} WHERE workspace = :workspace AND {id_field} IN ({ids_list})"
+
+        try:
+            await self.db.execute(delete_sql, {"workspace": self.db.workspace})
+            logger.debug(
+                f"Successfully deleted {len(ids)} vectors from {self.namespace}"
+            )
+        except Exception as e:
+            logger.error(f"Error while deleting vectors from {self.namespace}: {e}")
+
     async def delete_entity(self, entity_name: str) -> None:
-        raise NotImplementedError
+        """Delete an entity by its name from the vector storage.
+
+        Args:
+            entity_name: The name of the entity to delete
+        """
+        try:
+            # Construct SQL to delete the entity
+            delete_sql = """DELETE FROM LIGHTRAG_GRAPH_NODES
+                            WHERE workspace = :workspace AND name = :entity_name"""
+
+            await self.db.execute(
+                delete_sql, {"workspace": self.db.workspace, "entity_name": entity_name}
+            )
+            logger.debug(f"Successfully deleted entity {entity_name}")
+        except Exception as e:
+            logger.error(f"Error deleting entity {entity_name}: {e}")
 
     async def delete_entity_relation(self, entity_name: str) -> None:
-        raise NotImplementedError
+        """Delete all relations associated with an entity.
+
+        Args:
+            entity_name: The name of the entity whose relations should be deleted
+        """
+        try:
+            # Delete relations where the entity is either the source or target
+            delete_sql = """DELETE FROM LIGHTRAG_GRAPH_EDGES
+                            WHERE workspace = :workspace AND (source_name = :entity_name OR target_name = :entity_name)"""
+
+            await self.db.execute(
+                delete_sql, {"workspace": self.db.workspace, "entity_name": entity_name}
+            )
+            logger.debug(f"Successfully deleted relations for entity {entity_name}")
+        except Exception as e:
+            logger.error(f"Error deleting relations for entity {entity_name}: {e}")
 
     async def index_done_callback(self) -> None:
         # Ti handles persistence automatically
         pass
+
+    async def drop(self) -> dict[str, str]:
+        """Drop the storage"""
+        try:
+            table_name = namespace_to_table_name(self.namespace)
+            if not table_name:
+                return {
+                    "status": "error",
+                    "message": f"Unknown namespace: {self.namespace}",
+                }
+
+            drop_sql = SQL_TEMPLATES["drop_specifiy_table_workspace"].format(
+                table_name=table_name
+            )
+            await self.db.execute(drop_sql, {"workspace": self.db.workspace})
+            return {"status": "success", "message": "data dropped"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    async def search_by_prefix(self, prefix: str) -> list[dict[str, Any]]:
+        """Search for records with IDs starting with a specific prefix.
+
+        Args:
+            prefix: The prefix to search for in record IDs
+
+        Returns:
+            List of records with matching ID prefixes
+        """
+        # Determine which table to query based on namespace
+        if self.namespace == NameSpace.VECTOR_STORE_ENTITIES:
+            sql_template = """
+                SELECT entity_id as id, name as entity_name, entity_type, description, content
+                FROM LIGHTRAG_GRAPH_NODES
+                WHERE entity_id LIKE :prefix_pattern AND workspace = :workspace
+            """
+        elif self.namespace == NameSpace.VECTOR_STORE_RELATIONSHIPS:
+            sql_template = """
+                SELECT relation_id as id, source_name as src_id, target_name as tgt_id,
+                       keywords, description, content
+                FROM LIGHTRAG_GRAPH_EDGES
+                WHERE relation_id LIKE :prefix_pattern AND workspace = :workspace
+            """
+        elif self.namespace == NameSpace.VECTOR_STORE_CHUNKS:
+            sql_template = """
+                SELECT chunk_id as id, content, tokens, chunk_order_index, full_doc_id
+                FROM LIGHTRAG_DOC_CHUNKS
+                WHERE chunk_id LIKE :prefix_pattern AND workspace = :workspace
+            """
+        else:
+            logger.warning(
+                f"Namespace {self.namespace} not supported for prefix search"
+            )
+            return []
+
+        # Add prefix pattern parameter with % for SQL LIKE
+        prefix_pattern = f"{prefix}%"
+        params = {"prefix_pattern": prefix_pattern, "workspace": self.db.workspace}
+
+        try:
+            results = await self.db.query(sql_template, params=params, multirows=True)
+            logger.debug(
+                f"Found {len(results) if results else 0} records with prefix '{prefix}'"
+            )
+            return results if results else []
+        except Exception as e:
+            logger.error(f"Error searching records with prefix '{prefix}': {e}")
+            return []
+
+    async def get_by_id(self, id: str) -> dict[str, Any] | None:
+        """Get vector data by its ID
+
+        Args:
+            id: The unique identifier of the vector
+
+        Returns:
+            The vector data if found, or None if not found
+        """
+        try:
+            # Determine which table to query based on namespace
+            if self.namespace == NameSpace.VECTOR_STORE_ENTITIES:
+                sql_template = """
+                    SELECT entity_id as id, name as entity_name, entity_type, description, content
+                    FROM LIGHTRAG_GRAPH_NODES
+                    WHERE entity_id = :entity_id AND workspace = :workspace
+                """
+                params = {"entity_id": id, "workspace": self.db.workspace}
+            elif self.namespace == NameSpace.VECTOR_STORE_RELATIONSHIPS:
+                sql_template = """
+                    SELECT relation_id as id, source_name as src_id, target_name as tgt_id,
+                           keywords, description, content
+                    FROM LIGHTRAG_GRAPH_EDGES
+                    WHERE relation_id = :relation_id AND workspace = :workspace
+                """
+                params = {"relation_id": id, "workspace": self.db.workspace}
+            elif self.namespace == NameSpace.VECTOR_STORE_CHUNKS:
+                sql_template = """
+                    SELECT chunk_id as id, content, tokens, chunk_order_index, full_doc_id
+                    FROM LIGHTRAG_DOC_CHUNKS
+                    WHERE chunk_id = :chunk_id AND workspace = :workspace
+                """
+                params = {"chunk_id": id, "workspace": self.db.workspace}
+            else:
+                logger.warning(
+                    f"Namespace {self.namespace} not supported for get_by_id"
+                )
+                return None
+
+            result = await self.db.query(sql_template, params=params)
+            return result
+        except Exception as e:
+            logger.error(f"Error retrieving vector data for ID {id}: {e}")
+            return None
+
+    async def get_by_ids(self, ids: list[str]) -> list[dict[str, Any]]:
+        """Get multiple vector data by their IDs
+
+        Args:
+            ids: List of unique identifiers
+
+        Returns:
+            List of vector data objects that were found
+        """
+        if not ids:
+            return []
+
+        try:
+            # Format IDs for SQL IN clause
+            ids_str = ", ".join([f"'{id}'" for id in ids])
+
+            # Determine which table to query based on namespace
+            if self.namespace == NameSpace.VECTOR_STORE_ENTITIES:
+                sql_template = f"""
+                    SELECT entity_id as id, name as entity_name, entity_type, description, content
+                    FROM LIGHTRAG_GRAPH_NODES
+                    WHERE entity_id IN ({ids_str}) AND workspace = :workspace
+                """
+            elif self.namespace == NameSpace.VECTOR_STORE_RELATIONSHIPS:
+                sql_template = f"""
+                    SELECT relation_id as id, source_name as src_id, target_name as tgt_id,
+                           keywords, description, content
+                    FROM LIGHTRAG_GRAPH_EDGES
+                    WHERE relation_id IN ({ids_str}) AND workspace = :workspace
+                """
+            elif self.namespace == NameSpace.VECTOR_STORE_CHUNKS:
+                sql_template = f"""
+                    SELECT chunk_id as id, content, tokens, chunk_order_index, full_doc_id
+                    FROM LIGHTRAG_DOC_CHUNKS
+                    WHERE chunk_id IN ({ids_str}) AND workspace = :workspace
+                """
+            else:
+                logger.warning(
+                    f"Namespace {self.namespace} not supported for get_by_ids"
+                )
+                return []
+
+            params = {"workspace": self.db.workspace}
+            results = await self.db.query(sql_template, params=params, multirows=True)
+            return results if results else []
+        except Exception as e:
+            logger.error(f"Error retrieving vector data for IDs {ids}: {e}")
+            return []
 
 
 @final
@@ -492,13 +802,6 @@ class TiDBGraphStorage(BaseGraphStorage):
         }
         await self.db.execute(merge_sql, data)
 
-    async def embed_nodes(
-        self, algorithm: str
-    ) -> tuple[np.ndarray[Any, Any], list[str]]:
-        if algorithm not in self._node_embed_algorithms:
-            raise ValueError(f"Node embedding algorithm {algorithm} not supported")
-        return await self._node_embed_algorithms[algorithm]()
-
     # Query
 
     async def has_node(self, node_id: str) -> bool:
@@ -557,16 +860,176 @@ class TiDBGraphStorage(BaseGraphStorage):
         # Ti handles persistence automatically
         pass
 
+    async def drop(self) -> dict[str, str]:
+        """Drop the storage"""
+        try:
+            drop_sql = """
+                DELETE FROM LIGHTRAG_GRAPH_EDGES WHERE workspace = :workspace;
+                DELETE FROM LIGHTRAG_GRAPH_NODES WHERE workspace = :workspace;
+            """
+            await self.db.execute(drop_sql, {"workspace": self.db.workspace})
+            return {"status": "success", "message": "graph data dropped"}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     async def delete_node(self, node_id: str) -> None:
-        raise NotImplementedError
+        """Delete a node and all its related edges
+
+        Args:
+            node_id: The ID of the node to delete
+        """
+        # First delete all edges related to this node
+        await self.db.execute(
+            SQL_TEMPLATES["delete_node_edges"],
+            {"name": node_id, "workspace": self.db.workspace},
+        )
+
+        # Then delete the node itself
+        await self.db.execute(
+            SQL_TEMPLATES["delete_node"],
+            {"name": node_id, "workspace": self.db.workspace},
+        )
+
+        logger.debug(
+            f"Node {node_id} and its related edges have been deleted from the graph"
+        )
 
     async def get_all_labels(self) -> list[str]:
-        raise NotImplementedError
+        """Get all entity types (labels) in the database
+
+        Returns:
+            List of labels sorted alphabetically
+        """
+        result = await self.db.query(
+            SQL_TEMPLATES["get_all_labels"],
+            {"workspace": self.db.workspace},
+            multirows=True,
+        )
+
+        if not result:
+            return []
+
+        # Extract all labels
+        return [item["label"] for item in result]
 
     async def get_knowledge_graph(
         self, node_label: str, max_depth: int = 5
     ) -> KnowledgeGraph:
-        raise NotImplementedError
+        """
+        Get a connected subgraph of nodes matching the specified label
+        Maximum number of nodes is limited by MAX_GRAPH_NODES environment variable (default: 1000)
+
+        Args:
+            node_label: The node label to match
+            max_depth: Maximum depth of the subgraph
+
+        Returns:
+            KnowledgeGraph object containing nodes and edges
+        """
+        result = KnowledgeGraph()
+        MAX_GRAPH_NODES = int(os.getenv("MAX_GRAPH_NODES", 1000))
+
+        # Get matching nodes
+        if node_label == "*":
+            # Handle special case, get all nodes
+            node_results = await self.db.query(
+                SQL_TEMPLATES["get_all_nodes"],
+                {"workspace": self.db.workspace, "max_nodes": MAX_GRAPH_NODES},
+                multirows=True,
+            )
+        else:
+            # Get nodes matching the label
+            label_pattern = f"%{node_label}%"
+            node_results = await self.db.query(
+                SQL_TEMPLATES["get_matching_nodes"],
+                {"workspace": self.db.workspace, "label_pattern": label_pattern},
+                multirows=True,
+            )
+
+        if not node_results:
+            logger.warning(f"No nodes found matching label {node_label}")
+            return result
+
+        # Limit the number of returned nodes
+        if len(node_results) > MAX_GRAPH_NODES:
+            node_results = node_results[:MAX_GRAPH_NODES]
+
+        # Extract node names for edge query
+        node_names = [node["name"] for node in node_results]
+        node_names_str = ",".join([f"'{name}'" for name in node_names])
+
+        # Add nodes to result
+        for node in node_results:
+            node_properties = {
+                k: v for k, v in node.items() if k not in ["id", "name", "entity_type"]
+            }
+            result.nodes.append(
+                KnowledgeGraphNode(
+                    id=node["name"],
+                    labels=[node["entity_type"]]
+                    if node.get("entity_type")
+                    else [node["name"]],
+                    properties=node_properties,
+                )
+            )
+
+        # Get related edges
+        edge_results = await self.db.query(
+            SQL_TEMPLATES["get_related_edges"].format(node_names=node_names_str),
+            {"workspace": self.db.workspace},
+            multirows=True,
+        )
+
+        if edge_results:
+            # Add edges to result
+            for edge in edge_results:
+                # Only include edges related to selected nodes
+                if (
+                    edge["source_name"] in node_names
+                    and edge["target_name"] in node_names
+                ):
+                    edge_id = f"{edge['source_name']}-{edge['target_name']}"
+                    edge_properties = {
+                        k: v
+                        for k, v in edge.items()
+                        if k not in ["id", "source_name", "target_name"]
+                    }
+
+                    result.edges.append(
+                        KnowledgeGraphEdge(
+                            id=edge_id,
+                            type="RELATED",
+                            source=edge["source_name"],
+                            target=edge["target_name"],
+                            properties=edge_properties,
+                        )
+                    )
+
+        logger.info(
+            f"Subgraph query successful | Node count: {len(result.nodes)} | Edge count: {len(result.edges)}"
+        )
+        return result
+
+    async def remove_nodes(self, nodes: list[str]):
+        """Delete multiple nodes
+
+        Args:
+            nodes: List of node IDs to delete
+        """
+        for node_id in nodes:
+            await self.delete_node(node_id)
+
+    async def remove_edges(self, edges: list[tuple[str, str]]):
+        """Delete multiple edges
+
+        Args:
+            edges: List of edges to delete, each edge is a (source, target) tuple
+        """
+        for source, target in edges:
+            await self.db.execute(
+                SQL_TEMPLATES["remove_multiple_edges"],
+                {"source": source, "target": target, "workspace": self.db.workspace},
+            )
 
 
 N_T = {
@@ -777,4 +1240,57 @@ SQL_TEMPLATES = {
         weight = VALUES(weight), keywords = VALUES(keywords), description = VALUES(description),
         source_chunk_id = VALUES(source_chunk_id)
     """,
+    "delete_node": """
+        DELETE FROM LIGHTRAG_GRAPH_NODES
+        WHERE name = :name AND workspace = :workspace
+    """,
+    "delete_node_edges": """
+        DELETE FROM LIGHTRAG_GRAPH_EDGES
+        WHERE (source_name = :name OR target_name = :name) AND workspace = :workspace
+    """,
+    "get_all_labels": """
+        SELECT DISTINCT entity_type as label
+        FROM LIGHTRAG_GRAPH_NODES
+        WHERE workspace = :workspace
+        ORDER BY entity_type
+    """,
+    "get_matching_nodes": """
+        SELECT * FROM LIGHTRAG_GRAPH_NODES
+        WHERE name LIKE :label_pattern AND workspace = :workspace
+        ORDER BY name
+    """,
+    "get_all_nodes": """
+        SELECT * FROM LIGHTRAG_GRAPH_NODES
+        WHERE workspace = :workspace
+        ORDER BY name
+        LIMIT :max_nodes
+    """,
+    "get_related_edges": """
+        SELECT * FROM LIGHTRAG_GRAPH_EDGES
+        WHERE (source_name IN (:node_names) OR target_name IN (:node_names))
+        AND workspace = :workspace
+    """,
+    "remove_multiple_edges": """
+        DELETE FROM LIGHTRAG_GRAPH_EDGES
+        WHERE (source_name = :source AND target_name = :target)
+        AND workspace = :workspace
+    """,
+    # Search by prefix SQL templates
+    "search_entity_by_prefix": """
+        SELECT entity_id as id, name as entity_name, entity_type, description, content
+        FROM LIGHTRAG_GRAPH_NODES
+        WHERE entity_id LIKE :prefix_pattern AND workspace = :workspace
+    """,
+    "search_relationship_by_prefix": """
+        SELECT relation_id as id, source_name as src_id, target_name as tgt_id, keywords, description, content
+        FROM LIGHTRAG_GRAPH_EDGES
+        WHERE relation_id LIKE :prefix_pattern AND workspace = :workspace
+    """,
+    "search_chunk_by_prefix": """
+        SELECT chunk_id as id, content, tokens, chunk_order_index, full_doc_id
+        FROM LIGHTRAG_DOC_CHUNKS
+        WHERE chunk_id LIKE :prefix_pattern AND workspace = :workspace
+    """,
+    # Drop tables
+    "drop_specifiy_table_workspace": "DELETE FROM {table_name} WHERE workspace = :workspace",
 }

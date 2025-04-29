@@ -5,14 +5,19 @@ import { defaultQueryLabel } from '@/lib/constants'
 import { Message, QueryRequest } from '@/api/lightrag'
 
 type Theme = 'dark' | 'light' | 'system'
+type Language = 'en' | 'zh' | 'fr' | 'ar' | 'zh_TW'
 type Tab = 'documents' | 'knowledge-graph' | 'retrieval' | 'api'
 
 interface SettingsState {
-  theme: Theme
-  setTheme: (theme: Theme) => void
+  // Document manager settings
+  showFileName: boolean
+  setShowFileName: (show: boolean) => void
 
+  // Graph viewer settings
   showPropertyPanel: boolean
   showNodeSearchBar: boolean
+  showLegend: boolean
+  setShowLegend: (show: boolean) => void
 
   showNodeLabel: boolean
   enableNodeDrag: boolean
@@ -21,32 +26,57 @@ interface SettingsState {
   enableHideUnselectedEdges: boolean
   enableEdgeEvents: boolean
 
+  minEdgeSize: number
+  setMinEdgeSize: (size: number) => void
+
+  maxEdgeSize: number
+  setMaxEdgeSize: (size: number) => void
+
+  graphQueryMaxDepth: number
+  setGraphQueryMaxDepth: (depth: number) => void
+
+  graphMaxNodes: number
+  setGraphMaxNodes: (nodes: number) => void
+
+  graphLayoutMaxIterations: number
+  setGraphLayoutMaxIterations: (iterations: number) => void
+
+  // Retrieval settings
   queryLabel: string
   setQueryLabel: (queryLabel: string) => void
-
-  enableHealthCheck: boolean
-  setEnableHealthCheck: (enable: boolean) => void
-
-  apiKey: string | null
-  setApiKey: (key: string | null) => void
-
-  currentTab: Tab
-  setCurrentTab: (tab: Tab) => void
 
   retrievalHistory: Message[]
   setRetrievalHistory: (history: Message[]) => void
 
   querySettings: Omit<QueryRequest, 'query'>
   updateQuerySettings: (settings: Partial<QueryRequest>) => void
+
+  // Auth settings
+  apiKey: string | null
+  setApiKey: (key: string | null) => void
+
+  // App settings
+  theme: Theme
+  setTheme: (theme: Theme) => void
+
+  language: Language
+  setLanguage: (lang: Language) => void
+
+  enableHealthCheck: boolean
+  setEnableHealthCheck: (enable: boolean) => void
+
+  currentTab: Tab
+  setCurrentTab: (tab: Tab) => void
 }
 
 const useSettingsStoreBase = create<SettingsState>()(
   persist(
     (set) => ({
       theme: 'system',
-
+      language: 'en',
       showPropertyPanel: true,
       showNodeSearchBar: true,
+      showLegend: false,
 
       showNodeLabel: true,
       enableNodeDrag: true,
@@ -55,12 +85,21 @@ const useSettingsStoreBase = create<SettingsState>()(
       enableHideUnselectedEdges: true,
       enableEdgeEvents: false,
 
+      minEdgeSize: 1,
+      maxEdgeSize: 1,
+
+      graphQueryMaxDepth: 3,
+      graphMaxNodes: 1000,
+      graphLayoutMaxIterations: 15,
+
       queryLabel: defaultQueryLabel,
+
       enableHealthCheck: true,
 
       apiKey: null,
 
       currentTab: 'documents',
+      showFileName: false,
 
       retrievalHistory: [],
 
@@ -81,10 +120,33 @@ const useSettingsStoreBase = create<SettingsState>()(
 
       setTheme: (theme: Theme) => set({ theme }),
 
+      setLanguage: (language: Language) => {
+        set({ language })
+        // Update i18n after state is updated
+        import('i18next').then(({ default: i18n }) => {
+          if (i18n.language !== language) {
+            i18n.changeLanguage(language)
+          }
+        })
+      },
+
+      setGraphLayoutMaxIterations: (iterations: number) =>
+        set({
+          graphLayoutMaxIterations: iterations
+        }),
+
       setQueryLabel: (queryLabel: string) =>
         set({
           queryLabel
         }),
+
+      setGraphQueryMaxDepth: (depth: number) => set({ graphQueryMaxDepth: depth }),
+
+      setGraphMaxNodes: (nodes: number) => set({ graphMaxNodes: nodes }),
+
+      setMinEdgeSize: (size: number) => set({ minEdgeSize: size }),
+
+      setMaxEdgeSize: (size: number) => set({ maxEdgeSize: size }),
 
       setEnableHealthCheck: (enable: boolean) => set({ enableHealthCheck: enable }),
 
@@ -97,12 +159,15 @@ const useSettingsStoreBase = create<SettingsState>()(
       updateQuerySettings: (settings: Partial<QueryRequest>) =>
         set((state) => ({
           querySettings: { ...state.querySettings, ...settings }
-        }))
+        })),
+
+      setShowFileName: (show: boolean) => set({ showFileName: show }),
+      setShowLegend: (show: boolean) => set({ showLegend: show })
     }),
     {
       name: 'settings-storage',
       storage: createJSONStorage(() => localStorage),
-      version: 6,
+      version: 12,
       migrate: (state: any, version: number) => {
         if (version < 2) {
           state.showEdgeLabel = false
@@ -135,6 +200,29 @@ const useSettingsStoreBase = create<SettingsState>()(
             hl_keywords: [],
             ll_keywords: []
           }
+          state.retrievalHistory = []
+        }
+        if (version < 7) {
+          state.graphQueryMaxDepth = 3
+          state.graphLayoutMaxIterations = 15
+        }
+        if (version < 8) {
+          state.graphMinDegree = 0
+          state.language = 'en'
+        }
+        if (version < 9) {
+          state.showFileName = false
+        }
+        if (version < 10) {
+          delete state.graphMinDegree // 删除废弃参数
+          state.graphMaxNodes = 1000  // 添加新参数
+        }
+        if (version < 11) {
+          state.minEdgeSize = 1
+          state.maxEdgeSize = 1
+        }
+        if (version < 12) {
+          // Clear retrieval history to avoid compatibility issues with MessageWithError type
           state.retrievalHistory = []
         }
         return state

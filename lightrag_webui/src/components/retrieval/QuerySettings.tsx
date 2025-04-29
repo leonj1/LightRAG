@@ -14,8 +14,10 @@ import {
   SelectValue
 } from '@/components/ui/Select'
 import { useSettingsStore } from '@/stores/settings'
+import { useTranslation } from 'react-i18next'
 
 export default function QuerySettings() {
+  const { t } = useTranslation()
   const querySettings = useSettingsStore((state) => state.querySettings)
 
   const handleChange = useCallback((key: keyof QueryRequest, value: any) => {
@@ -23,10 +25,10 @@ export default function QuerySettings() {
   }, [])
 
   return (
-    <Card className="flex shrink-0 flex-col">
+    <Card className="flex shrink-0 flex-col min-w-[220px]">
       <CardHeader className="px-4 pt-4 pb-2">
-        <CardTitle>Parameters</CardTitle>
-        <CardDescription>Configure your query parameters</CardDescription>
+        <CardTitle>{t('retrievePanel.querySettings.parametersTitle')}</CardTitle>
+        <CardDescription>{t('retrievePanel.querySettings.parametersDescription')}</CardDescription>
       </CardHeader>
       <CardContent className="m-0 flex grow flex-col p-0 text-xs">
         <div className="relative size-full">
@@ -35,8 +37,8 @@ export default function QuerySettings() {
             <>
               <Text
                 className="ml-1"
-                text="Query Mode"
-                tooltip="Select the retrieval strategy:\n• Naive: Basic search without advanced techniques\n• Local: Context-dependent information retrieval\n• Global: Utilizes global knowledge base\n• Hybrid: Combines local and global retrieval\n• Mix: Integrates knowledge graph with vector retrieval"
+                text={t('retrievePanel.querySettings.queryMode')}
+                tooltip={t('retrievePanel.querySettings.queryModeTooltip')}
                 side="left"
               />
               <Select
@@ -48,11 +50,12 @@ export default function QuerySettings() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="naive">Naive</SelectItem>
-                    <SelectItem value="local">Local</SelectItem>
-                    <SelectItem value="global">Global</SelectItem>
-                    <SelectItem value="hybrid">Hybrid</SelectItem>
-                    <SelectItem value="mix">Mix</SelectItem>
+                    <SelectItem value="naive">{t('retrievePanel.querySettings.queryModeOptions.naive')}</SelectItem>
+                    <SelectItem value="local">{t('retrievePanel.querySettings.queryModeOptions.local')}</SelectItem>
+                    <SelectItem value="global">{t('retrievePanel.querySettings.queryModeOptions.global')}</SelectItem>
+                    <SelectItem value="hybrid">{t('retrievePanel.querySettings.queryModeOptions.hybrid')}</SelectItem>
+                    <SelectItem value="mix">{t('retrievePanel.querySettings.queryModeOptions.mix')}</SelectItem>
+                    <SelectItem value="bypass">{t('retrievePanel.querySettings.queryModeOptions.bypass')}</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -62,8 +65,8 @@ export default function QuerySettings() {
             <>
               <Text
                 className="ml-1"
-                text="Response Format"
-                tooltip="Defines the response format. Examples:\n• Multiple Paragraphs\n• Single Paragraph\n• Bullet Points"
+                text={t('retrievePanel.querySettings.responseFormat')}
+                tooltip={t('retrievePanel.querySettings.responseFormatTooltip')}
                 side="left"
               />
               <Select
@@ -75,9 +78,9 @@ export default function QuerySettings() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="Multiple Paragraphs">Multiple Paragraphs</SelectItem>
-                    <SelectItem value="Single Paragraph">Single Paragraph</SelectItem>
-                    <SelectItem value="Bullet Points">Bullet Points</SelectItem>
+                    <SelectItem value="Multiple Paragraphs">{t('retrievePanel.querySettings.responseFormatOptions.multipleParagraphs')}</SelectItem>
+                    <SelectItem value="Single Paragraph">{t('retrievePanel.querySettings.responseFormatOptions.singleParagraph')}</SelectItem>
+                    <SelectItem value="Bullet Points">{t('retrievePanel.querySettings.responseFormatOptions.bulletPoints')}</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -87,18 +90,23 @@ export default function QuerySettings() {
             <>
               <Text
                 className="ml-1"
-                text="Top K Results"
-                tooltip="Number of top items to retrieve. Represents entities in 'local' mode and relationships in 'global' mode"
+                text={t('retrievePanel.querySettings.topK')}
+                tooltip={t('retrievePanel.querySettings.topKTooltip')}
                 side="left"
               />
-              <NumberInput
-                id="top_k"
-                stepper={1}
-                value={querySettings.top_k}
-                onValueChange={(v) => handleChange('top_k', v)}
-                min={1}
-                placeholder="Number of results"
-              />
+              <div>
+                <label htmlFor="top_k" className="sr-only">
+                  {t('retrievePanel.querySettings.topK')}
+                </label>
+                <NumberInput
+                  id="top_k"
+                  stepper={1}
+                  value={querySettings.top_k}
+                  onValueChange={(v) => handleChange('top_k', v)}
+                  min={1}
+                  placeholder={t('retrievePanel.querySettings.topKPlaceholder')}
+                />
+              </div>
             </>
 
             {/* Max Tokens */}
@@ -106,51 +114,66 @@ export default function QuerySettings() {
               <>
                 <Text
                   className="ml-1"
-                  text="Max Tokens for Text Unit"
-                  tooltip="Maximum number of tokens allowed for each retrieved text chunk"
+                  text={t('retrievePanel.querySettings.maxTokensTextUnit')}
+                  tooltip={t('retrievePanel.querySettings.maxTokensTextUnitTooltip')}
                   side="left"
                 />
-                <NumberInput
-                  id="max_token_for_text_unit"
-                  stepper={500}
-                  value={querySettings.max_token_for_text_unit}
-                  onValueChange={(v) => handleChange('max_token_for_text_unit', v)}
-                  min={1}
-                  placeholder="Max tokens for text unit"
-                />
+                <div>
+                  <label htmlFor="max_token_for_text_unit" className="sr-only">
+                    {t('retrievePanel.querySettings.maxTokensTextUnit')}
+                  </label>
+                  <NumberInput
+                    id="max_token_for_text_unit"
+                    stepper={500}
+                    value={querySettings.max_token_for_text_unit}
+                    onValueChange={(v) => handleChange('max_token_for_text_unit', v)}
+                    min={1}
+                    placeholder={t('retrievePanel.querySettings.maxTokensTextUnit')}
+                  />
+                </div>
               </>
 
               <>
                 <Text
-                  text="Max Tokens for Global Context"
-                  tooltip="Maximum number of tokens allocated for relationship descriptions in global retrieval"
+                  text={t('retrievePanel.querySettings.maxTokensGlobalContext')}
+                  tooltip={t('retrievePanel.querySettings.maxTokensGlobalContextTooltip')}
                   side="left"
                 />
-                <NumberInput
-                  id="max_token_for_global_context"
-                  stepper={500}
-                  value={querySettings.max_token_for_global_context}
-                  onValueChange={(v) => handleChange('max_token_for_global_context', v)}
-                  min={1}
-                  placeholder="Max tokens for global context"
-                />
+                <div>
+                  <label htmlFor="max_token_for_global_context" className="sr-only">
+                    {t('retrievePanel.querySettings.maxTokensGlobalContext')}
+                  </label>
+                  <NumberInput
+                    id="max_token_for_global_context"
+                    stepper={500}
+                    value={querySettings.max_token_for_global_context}
+                    onValueChange={(v) => handleChange('max_token_for_global_context', v)}
+                    min={1}
+                    placeholder={t('retrievePanel.querySettings.maxTokensGlobalContext')}
+                  />
+                </div>
               </>
 
               <>
                 <Text
                   className="ml-1"
-                  text="Max Tokens for Local Context"
-                  tooltip="Maximum number of tokens allocated for entity descriptions in local retrieval"
+                  text={t('retrievePanel.querySettings.maxTokensLocalContext')}
+                  tooltip={t('retrievePanel.querySettings.maxTokensLocalContextTooltip')}
                   side="left"
                 />
-                <NumberInput
-                  id="max_token_for_local_context"
-                  stepper={500}
-                  value={querySettings.max_token_for_local_context}
-                  onValueChange={(v) => handleChange('max_token_for_local_context', v)}
-                  min={1}
-                  placeholder="Max tokens for local context"
-                />
+                <div>
+                  <label htmlFor="max_token_for_local_context" className="sr-only">
+                    {t('retrievePanel.querySettings.maxTokensLocalContext')}
+                  </label>
+                  <NumberInput
+                    id="max_token_for_local_context"
+                    stepper={500}
+                    value={querySettings.max_token_for_local_context}
+                    onValueChange={(v) => handleChange('max_token_for_local_context', v)}
+                    min={1}
+                    placeholder={t('retrievePanel.querySettings.maxTokensLocalContext')}
+                  />
+                </div>
               </>
             </>
 
@@ -158,20 +181,25 @@ export default function QuerySettings() {
             <>
               <Text
                 className="ml-1"
-                text="History Turns"
-                tooltip="Number of complete conversation turns (user-assistant pairs) to consider in the response context"
+                text={t('retrievePanel.querySettings.historyTurns')}
+                tooltip={t('retrievePanel.querySettings.historyTurnsTooltip')}
                 side="left"
               />
-              <NumberInput
-                className="!border-input"
-                id="history_turns"
-                stepper={1}
-                type="text"
-                value={querySettings.history_turns}
-                onValueChange={(v) => handleChange('history_turns', v)}
-                min={0}
-                placeholder="Number of history turns"
-              />
+              <div>
+                <label htmlFor="history_turns" className="sr-only">
+                  {t('retrievePanel.querySettings.historyTurns')}
+                </label>
+                <NumberInput
+                  className="!border-input"
+                  id="history_turns"
+                  stepper={1}
+                  type="text"
+                  value={querySettings.history_turns}
+                  onValueChange={(v) => handleChange('history_turns', v)}
+                  min={0}
+                  placeholder={t('retrievePanel.querySettings.historyTurnsPlaceholder')}
+                />
+              </div>
             </>
 
             {/* Keywords */}
@@ -179,58 +207,69 @@ export default function QuerySettings() {
               <>
                 <Text
                   className="ml-1"
-                  text="High-Level Keywords"
-                  tooltip="List of high-level keywords to prioritize in retrieval. Separate with commas"
+                  text={t('retrievePanel.querySettings.hlKeywords')}
+                  tooltip={t('retrievePanel.querySettings.hlKeywordsTooltip')}
                   side="left"
                 />
-                <Input
-                  id="hl_keywords"
-                  type="text"
-                  value={querySettings.hl_keywords?.join(', ')}
-                  onChange={(e) => {
-                    const keywords = e.target.value
-                      .split(',')
-                      .map((k) => k.trim())
-                      .filter((k) => k !== '')
-                    handleChange('hl_keywords', keywords)
-                  }}
-                  placeholder="Enter keywords"
-                />
+                <div>
+                  <label htmlFor="hl_keywords" className="sr-only">
+                    {t('retrievePanel.querySettings.hlKeywords')}
+                  </label>
+                  <Input
+                    id="hl_keywords"
+                    type="text"
+                    value={querySettings.hl_keywords?.join(', ')}
+                    onChange={(e) => {
+                      const keywords = e.target.value
+                        .split(',')
+                        .map((k) => k.trim())
+                        .filter((k) => k !== '')
+                      handleChange('hl_keywords', keywords)
+                    }}
+                    placeholder={t('retrievePanel.querySettings.hlkeywordsPlaceHolder')}
+                  />
+                </div>
               </>
 
               <>
                 <Text
                   className="ml-1"
-                  text="Low-Level Keywords"
-                  tooltip="List of low-level keywords to refine retrieval focus. Separate with commas"
+                  text={t('retrievePanel.querySettings.llKeywords')}
+                  tooltip={t('retrievePanel.querySettings.llKeywordsTooltip')}
                   side="left"
                 />
-                <Input
-                  id="ll_keywords"
-                  type="text"
-                  value={querySettings.ll_keywords?.join(', ')}
-                  onChange={(e) => {
-                    const keywords = e.target.value
-                      .split(',')
-                      .map((k) => k.trim())
-                      .filter((k) => k !== '')
-                    handleChange('ll_keywords', keywords)
-                  }}
-                  placeholder="Enter keywords"
-                />
+                <div>
+                  <label htmlFor="ll_keywords" className="sr-only">
+                    {t('retrievePanel.querySettings.llKeywords')}
+                  </label>
+                  <Input
+                    id="ll_keywords"
+                    type="text"
+                    value={querySettings.ll_keywords?.join(', ')}
+                    onChange={(e) => {
+                      const keywords = e.target.value
+                        .split(',')
+                        .map((k) => k.trim())
+                        .filter((k) => k !== '')
+                      handleChange('ll_keywords', keywords)
+                    }}
+                    placeholder={t('retrievePanel.querySettings.hlkeywordsPlaceHolder')}
+                  />
+                </div>
               </>
             </>
 
             {/* Toggle Options */}
             <>
               <div className="flex items-center gap-2">
-                <Text
-                  className="ml-1"
-                  text="Only Need Context"
-                  tooltip="If True, only returns the retrieved context without generating a response"
-                  side="left"
-                />
-                <div className="grow" />
+                <label htmlFor="only_need_context" className="flex-1">
+                  <Text
+                    className="ml-1"
+                    text={t('retrievePanel.querySettings.onlyNeedContext')}
+                    tooltip={t('retrievePanel.querySettings.onlyNeedContextTooltip')}
+                    side="left"
+                  />
+                </label>
                 <Checkbox
                   className="mr-1 cursor-pointer"
                   id="only_need_context"
@@ -240,13 +279,14 @@ export default function QuerySettings() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Text
-                  className="ml-1"
-                  text="Only Need Prompt"
-                  tooltip="If True, only returns the generated prompt without producing a response"
-                  side="left"
-                />
-                <div className="grow" />
+                <label htmlFor="only_need_prompt" className="flex-1">
+                  <Text
+                    className="ml-1"
+                    text={t('retrievePanel.querySettings.onlyNeedPrompt')}
+                    tooltip={t('retrievePanel.querySettings.onlyNeedPromptTooltip')}
+                    side="left"
+                  />
+                </label>
                 <Checkbox
                   className="mr-1 cursor-pointer"
                   id="only_need_prompt"
@@ -256,13 +296,14 @@ export default function QuerySettings() {
               </div>
 
               <div className="flex items-center gap-2">
-                <Text
-                  className="ml-1"
-                  text="Stream Response"
-                  tooltip="If True, enables streaming output for real-time responses"
-                  side="left"
-                />
-                <div className="grow" />
+                <label htmlFor="stream" className="flex-1">
+                  <Text
+                    className="ml-1"
+                    text={t('retrievePanel.querySettings.streamResponse')}
+                    tooltip={t('retrievePanel.querySettings.streamResponseTooltip')}
+                    side="left"
+                  />
+                </label>
                 <Checkbox
                   className="mr-1 cursor-pointer"
                   id="stream"
