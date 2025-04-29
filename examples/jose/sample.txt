@@ -1,0 +1,13 @@
+This is a sample text file for testing the LightRAG ingestion script.
+
+LightRAG is a powerful RAG (Retrieval-Augmented Generation) framework that allows you to:
+1. Ingest documents
+2. Process and chunk them
+3. Create embeddings
+4. Build a knowledge graph
+5. Query the knowledge base with different strategies
+
+This sample file will be used to test the ingestion process with a progress bar.
+The script should display information about this file and then ingest it into LightRAG.
+
+Let's see how it works!
