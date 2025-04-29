@@ -1,0 +1,17 @@
+This is a sample document for testing the update functionality.
+
+LightRAG is a powerful RAG (Retrieval-Augmented Generation) framework that allows you to:
+1. Ingest documents
+2. Process and chunk them
+3. Create embeddings
+4. Build a knowledge graph
+5. Query the knowledge base with different strategies
+
+When a document is updated, we need to handle it efficiently. This sample file will be used to test the update process.
+
+The update.py script provides three strategies:
+- replace: Delete the old document and ingest the new one
+- add: Keep the old document and add the new one
+- auto: Choose strategy based on change percentage threshold
+
+Let's see how it works!
