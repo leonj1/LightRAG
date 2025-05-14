@@ -1,5 +1,6 @@
 import os
 import asyncio
+import argparse
 import logging
 import logging.config
 import time
@@ -94,6 +95,14 @@ async def initialize_rag():
 
 
 async def main():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Run LightRAG queries with different modes')
+    parser.add_argument('-q', '--query', required=True, help='The query to run against the RAG system')
+    args = parser.parse_args()
+    
+    # Get the user query from command line arguments
+    user_query = args.query
+    
     # Check if OPENAI_API_KEY environment variable exists
     if not os.getenv("OPENAI_API_KEY"):
         print(
@@ -149,7 +158,7 @@ async def main():
         logger.info(f"[{timestamp}] Starting naive query...")
         
         result = await rag.aquery(
-            "What are the top themes in this story?", param=QueryParam(mode="naive")
+            user_query, param=QueryParam(mode="naive")
         )
         
         end_time = time.time()
@@ -172,7 +181,7 @@ async def main():
         logger.info(f"[{timestamp}] Starting local query...")
         
         result = await rag.aquery(
-            "What are the top themes in this story?", param=QueryParam(mode="local")
+            user_query, param=QueryParam(mode="local")
         )
         
         end_time = time.time()
@@ -195,7 +204,7 @@ async def main():
         logger.info(f"[{timestamp}] Starting global query...")
         
         result = await rag.aquery(
-            "What are the top themes in this story?",
+            user_query,
             param=QueryParam(mode="global"),
         )
         
@@ -219,7 +228,7 @@ async def main():
         logger.info(f"[{timestamp}] Starting hybrid query...")
         
         result = await rag.aquery(
-            "What are the top themes in this story?",
+            user_query,
             param=QueryParam(mode="hybrid"),
         )
         
