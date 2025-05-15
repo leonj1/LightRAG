@@ -32,8 +32,7 @@ run:
 		echo "Usage: make run OPENAI_API_KEY=your-api-key [QUERY=\"Your query\"]"; \
 		exit 1; \
 	fi
-	@echo "Running Docker container with query: $(QUERY)"
-	docker run -e OPENAI_API_KEY=$(OPENAI_API_KEY) $(IMAGE_NAME) -q "$(QUERY)" -m naive
+	docker run -e OPENAI_API_KEY=$(OPENAI_API_KEY) -e LOG_LEVEL=WARNING $(IMAGE_NAME) -q "$(QUERY)" -m hybrid 2>&1 | grep -v -E "INFO:|INFO -|Warning: 'wcwidth' library not found"
 
 # Clean up
 clean:

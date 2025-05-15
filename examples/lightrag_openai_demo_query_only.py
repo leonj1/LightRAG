@@ -28,7 +28,10 @@ async def simple_query(query, mode="naive"):
     rag = await initialize_rag()
     return await rag.aquery(
         query,
-        param=QueryParam(mode="naive")
+        param=QueryParam(
+            mode="naive",
+            user_prompt="Do not include any references section in your response.",
+        )
     )
 
 async def main():
@@ -50,4 +53,3 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    print("\nDone!")
