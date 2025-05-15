@@ -69,3 +69,5 @@ test_*
 memory-bank/
 
 foo/
+terraform-docs/
+
