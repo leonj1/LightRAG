@@ -10,11 +10,12 @@ from lightrag.llm.openai import gpt_4o_mini_complete, openai_embed
 from lightrag.kg.shared_storage import initialize_pipeline_status
 from lightrag.utils import logger, set_verbose_debug
 
-WORKING_DIR = "./dickens"
+# Default working directory if not specified
+DEFAULT_WORKING_DIR = "./dickens"
 
-async def initialize_rag():
+async def initialize_rag(working_dir=DEFAULT_WORKING_DIR):
     rag = LightRAG(
-        working_dir=WORKING_DIR,
+        working_dir=working_dir,
         embedding_func=openai_embed,
         llm_model_func=gpt_4o_mini_complete,
     )
@@ -24,8 +25,8 @@ async def initialize_rag():
 
     return rag
 # Simple response function that doesn't require any initialization
-async def simple_query(query, mode="naive"):
-    rag = await initialize_rag()
+async def simple_query(query, mode="naive", working_dir=DEFAULT_WORKING_DIR):
+    rag = await initialize_rag(working_dir)
     return await rag.aquery(
         query,
         param=QueryParam(
@@ -40,14 +41,17 @@ async def main():
     parser.add_argument('-q', '--query', required=True, help='The query to run against the RAG system')
     parser.add_argument('-m', '--mode', default="naive", choices=["naive", "local", "global", "hybrid"], 
                         help='Query mode to use (default: naive)')
+    parser.add_argument('-d', '--dir', default=DEFAULT_WORKING_DIR, 
+                        help=f'Directory where the store folder resides (default: {DEFAULT_WORKING_DIR})')
     args = parser.parse_args()
     
-    # Get the user query from command line arguments
+    # Get the arguments from command line
     user_query = args.query
     query_mode = args.mode
+    working_dir = args.dir
     
     try:
-        print(await simple_query(user_query, query_mode))
+        print(await simple_query(user_query, query_mode, working_dir))
     except Exception as e:
         print(f"An error occurred: {e}")
 
